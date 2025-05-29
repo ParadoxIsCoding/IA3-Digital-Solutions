@@ -21,7 +21,7 @@
             <div class="location-header">
                 <h2>{{ weather.station_name }}</h2>
                 <p class="last-updated">
-                    BOM Product Issue Time (UTC): {{ weather.last_updated_product if weather.last_updated_product != 'N/A' else 'Not available' }}
+                    BOM Product Info: {{ weather.last_updated_product if weather.last_updated_product != 'N/A' else 'Not available' }}
                 </p>
             </div>
 
@@ -29,7 +29,13 @@
                 {% for obs in weather.observations %}
                 <div class="observation-card">
                     <h3>Observation Time</h3>
-                    <p class="time-highlight">{{ obs.local_time.split(' ')[1] }} <span class="date-small">{{ obs.local_time.split('/')[0] }}/{{ obs.local_time.split('/')[1] }}/{{ obs.local_time.split('/')[2].split(' ')[0] }}</span></p>
+                    {% if obs.local_time_obj.malformed %}
+                        <p class="time-highlight">{{ obs.local_time_obj.original }} <span class="date-small">(Malformed format)</span></p>
+                    {% elif obs.local_time_obj.time == 'N/A' and obs.local_time_obj.date == 'N/A' %}
+                        <p class="time-highlight">{{ obs.local_time_obj.original | default('N/A') }}</p>
+                    {% else %}
+                        <p class="time-highlight">{{ obs.local_time_obj.time }} <span class="date-small">{{ obs.local_time_obj.date }}</span></p>
+                    {% endif %}
                     
                     <div class="weather-details">
                         <div class="detail-item">
