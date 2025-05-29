@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weather Preview</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <h1>Weather Observations</h1>
+
+        {% if error %}
+            <div class="error-message">
+                <h2>Error</h2>
+                <p>{{ error }}</p>
+                <p>Please try refreshing the page or check the station ID in the application.</p>
+            </div>
+        {% elif weather %}
+            <div class="location-header">
+                <h2>{{ weather.station_name }}</h2>
+                <p class="last-updated">
+                    BOM Product Issue Time (UTC): {{ weather.last_updated_product if weather.last_updated_product != 'N/A' else 'Not available' }}
+                </p>
+            </div>
+
+            <div class="observations-grid">
+                {% for obs in weather.observations %}
+                <div class="observation-card">
+                    <h3>Observation Time</h3>
+                    <p class="time-highlight">{{ obs.local_time.split(' ')[1] }} <span class="date-small">{{ obs.local_time.split('/')[0] }}/{{ obs.local_time.split('/')[1] }}/{{ obs.local_time.split('/')[2].split(' ')[0] }}</span></p>
+                    
+                    <div class="weather-details">
+                        <div class="detail-item">
+                            <span class="label">Temperature:</span>
+                            <span class="value">{{ obs.air_temp }}°C</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="label">Feels Like:</span>
+                            <span class="value">{{ obs.apparent_temp }}°C</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="label">Humidity:</span>
+                            <span class="value">{{ obs.humidity }}%</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="label">Wind:</span>
+                            <span class="value">{{ obs.wind_dir }} {{ obs.wind_spd_kmh }} km/h</span>
+                        </div>
+                        {% if obs.gust_kmh != 'N/A' and obs.gust_kmh != 0 and obs.gust_kmh != obs.wind_spd_kmh %}
+                        <div class="detail-item">
+                            <span class="label">Gusts:</span>
+                            <span class="value">{{ obs.gust_kmh }} km/h</span>
+                        </div>
+                        {% endif %}
+                        <div class="detail-item">
+                            <span class="label">Pressure:</span>
+                            <span class="value">{{ obs.pressure_hpa }} hPa</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="label">Rain (since 9am):</span>
+                            <span class="value">{{ obs.rain_since_9am }} mm</span>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <p>No observations found for this station.</p>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p>Loading weather data or no data available...</p>
+        {% endif %}
+
+        <div class="api-link">
+            <p>View raw data: <a href="{{ url_for('api_weather') }}" target="_blank">/api/weather</a></p>
+        </div>
+    </div>
+    <footer>
+        <p>Weather data sourced from <a href="http://www.bom.gov.au/" target="_blank">Bureau of Meteorology (BOM)</a>.</p>
+    </footer>
+</body>
+</html>
