@@ -61,7 +61,7 @@ def format_bom_local_time(time_str):
                 }
         # If neither format matches, mark as malformed
         raise ValueError("Unknown time string format")
-    except Exception as e:
+    except Exception:
         # print(f"Debug: Could not parse time_str '{time_str}': {e}") # Optional debug
         return {'date': 'N/A', 'time': 'N/A', 'original': time_str, 'malformed': True}
 
