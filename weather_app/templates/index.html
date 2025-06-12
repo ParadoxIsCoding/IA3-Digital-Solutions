@@ -25,6 +25,10 @@
                 </p>
             </div>
 
+            <div class="chart-container">
+                <canvas id="tempChart"></canvas>
+            </div>
+
             <div class="observations-grid">
                 {% for obs in weather.observations %}
                 <div class="observation-card">
@@ -85,5 +89,53 @@
     <footer>
         <p>Weather data sourced from <a href="http://www.bom.gov.au/" target="_blank">Bureau of Meteorology (BOM)</a>.</p>
     </footer>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        fetch('{{ url_for('api_weather') }}')
+            .then(r => r.json())
+            .then(data => {
+                const labels = data.observations.map(o => o.local_time_obj.time !== 'N/A' ? o.local_time_obj.time : o.local_time_obj.original).reverse();
+                const temps = data.observations.map(o => o.air_temp).reverse();
+                const ctx = document.getElementById('tempChart').getContext('2d');
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Temperature (°C)',
+                            data: temps,
+                            borderColor: '#ff9800',
+                            backgroundColor: 'rgba(255,152,0,0.2)',
+                            tension: 0.3
+                        }]
+                    },
+                    options: {
+                        scales: {
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: 'Time'
+                                },
+                                ticks: { color: '#e0e0e0' },
+                                grid: { color: '#333' }
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: 'Temperature (°C)'
+                                },
+                                ticks: { color: '#e0e0e0' },
+                                grid: { color: '#333' }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                labels: { color: '#e0e0e0' }
+                            }
+                        }
+                    }
+                });
+            });
+    </script>
 </body>
 </html>
