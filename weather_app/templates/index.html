@@ -3,79 +3,74 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Weather Preview</title>
+    <title>Weather Dashboard</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap" rel="stylesheet">
 </head>
 <body>
     <div class="container">
-        <h1>Weather Observations</h1>
+        <div class="header">
+            <h1>Weather Dashboard</h1>
+            <div class="station-switcher">
+                {% for id, station in stations.items() %}
+                    <a href="?station={{ id }}" class="station-button {{ 'active' if id == current_station else '' }}">
+                        {{ station.name }}
+                    </a>
+                {% endfor %}
+            </div>
+        </div>
 
         {% if error %}
             <div class="error-message">
                 <h2>Error</h2>
                 <p>{{ error }}</p>
-                <p>Please try refreshing the page or check the station ID in the application.</p>
             </div>
-        {% elif weather %}
+        {% elif weather and weather.observations %}
             <div class="location-header">
                 <h2>{{ weather.station_name }}</h2>
-                <p class="last-updated">
-                    BOM Product Info: {{ weather.last_updated_product if weather.last_updated_product != 'N/A' else 'Not available' }}
-                </p>
+                <p class="last-updated">{{ weather.last_updated_product }}</p>
             </div>
-
+            
+            <!-- Since Ecowitt real-time API gives one observation, a chart is not practical.
+                 This section is commented out but can be adapted for historical data later.
             <div class="chart-container">
                 <canvas id="tempChart"></canvas>
-            </div>
+            </div> 
+            -->
 
             <div class="observations-grid">
                 {% for obs in weather.observations %}
                 <div class="observation-card">
                     <h3>Observation Time</h3>
-                    {% if obs.local_time_obj.malformed %}
-                        <p class="time-highlight">{{ obs.local_time_obj.original }} <span class="date-small">(Malformed format)</span></p>
-                    {% elif obs.local_time_obj.time == 'N/A' and obs.local_time_obj.date == 'N/A' %}
-                        <p class="time-highlight">{{ obs.local_time_obj.original | default('N/A') }}</p>
-                    {% else %}
-                        <p class="time-highlight">{{ obs.local_time_obj.time }} <span class="date-small">{{ obs.local_time_obj.date }}</span></p>
-                    {% endif %}
+                    <p class="time-highlight">{{ obs.local_time_obj.time }} <span class="date-small">{{ obs.local_time_obj.date }}</span></p>
                     
                     <div class="weather-details">
                         <div class="detail-item">
                             <span class="label">Temperature:</span>
-                            <span class="value">{{ obs.air_temp }}°C</span>
-                        </div>
-                        <div class="detail-item">
-                            <span class="label">Feels Like:</span>
-                            <span class="value">{{ obs.apparent_temp }}°C</span>
+                            <span class="value">{{ obs.air_temp if obs.air_temp is not none else 'N/A' }}°C</span>
                         </div>
                         <div class="detail-item">
                             <span class="label">Humidity:</span>
-                            <span class="value">{{ obs.humidity }}%</span>
+                            <span class="value">{{ obs.humidity if obs.humidity is not none else 'N/A' }}%</span>
                         </div>
                         <div class="detail-item">
-                            <span class="label">Wind:</span>
-                            <span class="value">{{ obs.wind_dir }} {{ obs.wind_spd_kmh }} km/h</span>
+                            <span class="label">Wind Speed:</span>
+                            <span class="value">{{ obs.wind_spd_kmh if obs.wind_spd_kmh is not none else 'N/A' }} km/h</span>
                         </div>
-                        {% if obs.gust_kmh != 'N/A' and obs.gust_kmh != 0 and obs.gust_kmh != obs.wind_spd_kmh %}
                         <div class="detail-item">
-                            <span class="label">Gusts:</span>
-                            <span class="value">{{ obs.gust_kmh }} km/h</span>
+                            <span class="label">Wind Gust:</span>
+                            <span class="value">{{ obs.gust_kmh if obs.gust_kmh is not none else 'N/A' }} km/h</span>
                         </div>
-                        {% endif %}
                         <div class="detail-item">
                             <span class="label">Pressure:</span>
-                            <span class="value">{{ obs.pressure_hpa }} hPa</span>
+                            <span class="value">{{ obs.pressure_hpa if obs.pressure_hpa is not none else 'N/A' }} hPa</span>
                         </div>
                         <div class="detail-item">
-                            <span class="label">Rain (since 9am):</span>
-                            <span class="value">{{ obs.rain_since_9am }} mm</span>
+                            <span class="label">Daily Rain:</span>
+                            <span class="value">{{ obs.rain_since_9am if obs.rain_since_9am is not none else 'N/A' }} mm</span>
                         </div>
                     </div>
                 </div>
-                {% else %}
-                <p>No observations found for this station.</p>
                 {% endfor %}
             </div>
         {% else %}
@@ -83,59 +78,13 @@
         {% endif %}
 
         <div class="api-link">
-            <p>View raw data: <a href="{{ url_for('api_weather') }}" target="_blank">/api/weather</a></p>
+            <p>View raw data: <a href="{{ url_for('api_weather', station=current_station) }}" target="_blank">/api/weather?station={{ current_station }}</a></p>
         </div>
     </div>
     <footer>
-        <p>Weather data sourced from <a href="http://www.bom.gov.au/" target="_blank">Bureau of Meteorology (BOM)</a>.</p>
+        <p>Weather data sourced from Ecowitt.</p>
     </footer>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script>
-        fetch('{{ url_for('api_weather') }}')
-            .then(r => r.json())
-            .then(data => {
-                const labels = data.observations.map(o => o.local_time_obj.time !== 'N/A' ? o.local_time_obj.time : o.local_time_obj.original).reverse();
-                const temps = data.observations.map(o => o.air_temp).reverse();
-                const ctx = document.getElementById('tempChart').getContext('2d');
-                new Chart(ctx, {
-                    type: 'line',
-                    data: {
-                        labels: labels,
-                        datasets: [{
-                            label: 'Temperature (°C)',
-                            data: temps,
-                            borderColor: '#ff9800',
-                            backgroundColor: 'rgba(255,152,0,0.2)',
-                            tension: 0.3
-                        }]
-                    },
-                    options: {
-                        scales: {
-                            x: {
-                                title: {
-                                    display: true,
-                                    text: 'Time'
-                                },
-                                ticks: { color: '#e0e0e0' },
-                                grid: { color: '#333' }
-                            },
-                            y: {
-                                title: {
-                                    display: true,
-                                    text: 'Temperature (°C)'
-                                },
-                                ticks: { color: '#e0e0e0' },
-                                grid: { color: '#333' }
-                            }
-                        },
-                        plugins: {
-                            legend: {
-                                labels: { color: '#e0e0e0' }
-                            }
-                        }
-                    }
-                });
-            });
-    </script>
+    <!-- Chart.js script is kept for future use but not active for single-point data -->
 </body>
 </html>

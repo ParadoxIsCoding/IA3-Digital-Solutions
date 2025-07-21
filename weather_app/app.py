@@ -1,147 +1,125 @@
 import json
 import requests
-from flask import Flask, render_template, jsonify
-import urllib3 # Import urllib3 to disable SSL warnings
+from flask import Flask, render_template, jsonify, request
+import urllib3
+from datetime import datetime
 
 # Disable InsecureRequestWarning: CERTIFICATE_VERIFY_FAILED
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 app = Flask(__name__)
 
-# User is using Brisbane URL which sometimes has local_date_time_full in YYYYMMDDHHMMSS format
-BOM_URL = "https://reg.bom.gov.au/fwo/IDQ60901/IDQ60901.94575.json" # Brisbane
-# Original Archerfield was: "https://reg.bom.gov.au/fwo/IDQ60801/IDQ60801.94569.json"
-# Sydney (for DD/MM/YYYY HH:MM:SS testing): "https://reg.bom.gov.au/fwo/IDN60801/IDN60801.94576.json"
+# --- Configuration for Weather Stations ---
 
-def format_bom_local_time(time_str):
-    """
-    Formats BOM's local_date_time_full string.
-    Handles both "YYYYMMDDHHMMSS" and "DD/MM/YYYY HH:MM:SS" formats.
-    Returns a dictionary {'date': 'DD/MM/YYYY', 'time': 'HH:MM:SS', 'original': time_str} 
-    or {'date': 'N/A', 'time': 'N/A', 'original': time_str, 'malformed': True} on failure.
-    """
-    if not time_str or time_str == 'N/A':
-        return {'date': 'N/A', 'time': 'N/A', 'original': time_str}
+STATIONS = {
+    'station1': {
+        'name': 'Ecowitt Station 1',
+        'api_url': 'https://api.ecowitt.net/api/v3/device/real_time?application_key=2A514E07593482820CACAAB8FD0C73B2&api_key=17a5de25-fa25-4a18-9c86-78e93184c44c&mac=D8:BC:38:AA:96:AF&call_back=all'
+    },
+    'station2': {
+        'name': 'Ecowitt Station 2',
+        'api_url': 'https://api.ecowitt.net/api/v3/device/real_time?application_key=2A514E07593482820CACAAB8FD0C73B2&api_key=17a5de25-fa25-4a18-9c86-78e93184c44c&mac=D8:BC:38:AA:EF:E1&call_back=all'
+    },
+    'bom': {
+        'name': 'BOM Brisbane',
+        'api_url': 'https://reg.bom.gov.au/fwo/IDQ60901/IDQ60901.94575.json'
+    }
+}
 
+# --- Data Fetching and Processing ---
+
+def format_ecowitt_time(utc_timestamp):
+    """Formats a UTC timestamp from the Ecowitt API to a local time dictionary."""
+    if not utc_timestamp or not isinstance(utc_timestamp, int):
+        return {'date': 'N/A', 'time': 'N/A', 'original': utc_timestamp}
     try:
-        # Attempt to parse YYYYMMDDHHMMSS format
-        if len(time_str) == 14 and time_str.isdigit():
-            year = time_str[0:4]
-            month = time_str[4:6]
-            day = time_str[6:8]
-            hour = time_str[8:10]
-            minute = time_str[10:12]
-            second = time_str[12:14]
-            return {
-                'date': f"{day}/{month}/{year}",
-                'time': f"{hour}:{minute}:{second}",
-                'original': time_str
-            }
-        # Attempt to parse DD/MM/YYYY HH:MM:SS format
-        elif '/' in time_str and ' ' in time_str and ':' in time_str:
-            parts = time_str.split(' ', 1) # Split only on the first space
-            if len(parts) == 2:
-                date_part = parts[0]  # DD/MM/YYYY
-                time_part = parts[1]  # HH:MM:SS
-                
-                # Validate date part (e.g., 3 components, all digits)
-                date_elements = date_part.split('/')
-                if len(date_elements) != 3 or not all(d.isdigit() for d in date_elements):
-                    raise ValueError("Invalid date component in DD/MM/YYYY format")
-
-                # Validate time part (e.g., 3 components, all digits)
-                time_elements = time_part.split(':')
-                if len(time_elements) != 3 or not all(t.isdigit() for t in time_elements):
-                     raise ValueError("Invalid time component in HH:MM:SS format")
-
-                return {
-                    'date': date_part,
-                    'time': time_part,
-                    'original': time_str
-                }
-        # If neither format matches, mark as malformed
-        raise ValueError("Unknown time string format")
+        # Convert from seconds to a datetime object
+        dt_object = datetime.fromtimestamp(utc_timestamp)
+        return {
+            'date': dt_object.strftime('%d/%m/%Y'),
+            'time': dt_object.strftime('%H:%M:%S'),
+            'original': utc_timestamp
+        }
     except Exception:
-        # print(f"Debug: Could not parse time_str '{time_str}': {e}") # Optional debug
-        return {'date': 'N/A', 'time': 'N/A', 'original': time_str, 'malformed': True}
+        return {'date': 'N/A', 'time': 'N/A', 'original': utc_timestamp, 'malformed': True}
 
 
-def fetch_weather_data():
-    """Fetches and processes weather data from BOM."""
+def fetch_ecowitt_data(api_url, station_name):
+    """Fetches and processes weather data from the Ecowitt API."""
     try:
-        response = requests.get(BOM_URL, timeout=10, verify=False)
+        response = requests.get(api_url, timeout=10)
         response.raise_for_status()
-        data = response.json()
-
-        observations_data = data.get('observations', {}).get('data', [])
+        data = response.json().get('data', {})
         
-        if not observations_data:
-            return None, "No observation data found in the JSON response."
-
-        # Station name is usually consistent
-        station_name = observations_data[0].get('name', 'Unknown Location')
+        # Extract the weather data dictionary
+        weather_data = data.get('outdoor', {})
         
-        processed_observations = []
-        for obs in observations_data[:5]: # Get the latest 5 observations
-            raw_local_time = obs.get('local_date_time_full', 'N/A')
-            formatted_time_obj = format_bom_local_time(raw_local_time)
+        # The 'last_update' timestamp is in the main data object
+        last_update_timestamp = data.get('time')
+        formatted_time_obj = format_ecowitt_time(last_update_timestamp)
 
-            processed_observations.append({
-                'local_time_obj': formatted_time_obj, # Pass the dictionary
-                'aifstime_utc': obs.get('aifstime_utc', 'N/A'),
-                'air_temp': obs.get('air_temp', 'N/A'),
-                'apparent_temp': obs.get('apparent_t', 'N/A'),
-                'humidity': obs.get('rel_hum', 'N/A'),
-                'wind_dir': obs.get('wind_dir', 'N/A'),
-                'wind_spd_kmh': obs.get('wind_spd_kmh', 'N/A'),
-                'gust_kmh': obs.get('gust_kmh', 'N/A'),
-                'pressure_hpa': obs.get('press_qnh', 'N/A'),
-                'rain_since_9am': obs.get('rain_trace', 'N/A')
-            })
-        
-        header_info_list = data.get('observations', {}).get('header', [])
-        last_updated_product = 'N/A'
-        if header_info_list and isinstance(header_info_list, list) and len(header_info_list) > 0:
-            # BOM sometimes returns header as a list, sometimes not.
-            # And sometimes product_issue_time_utc is missing.
-             header_info = header_info_list[0] if isinstance(header_info_list, list) else header_info_list
-             if isinstance(header_info, dict):
-                last_updated_product = header_info.get('product_issue_time_utc', 'N/A')
-                if last_updated_product == 'N/A': # Fallback for some stations like Brisbane
-                    last_updated_product = header_info.get('refresh_message', 'N/A')
-
+        processed_observation = {
+            'local_time_obj': formatted_time_obj,
+            'air_temp': weather_data.get('temperature', {}).get('value'),
+            'apparent_temp': 'N/A', # Ecowitt doesn't provide this directly
+            'humidity': weather_data.get('humidity', {}).get('value'),
+            'wind_dir': 'N/A', # Not in this part of the API response
+            'wind_spd_kmh': data.get('wind', {}).get('wind_speed', {}).get('value'),
+            'gust_kmh': data.get('wind', {}).get('wind_gust', {}).get('value'),
+            'pressure_hpa': data.get('pressure', {}).get('absolute', {}).get('value'),
+            'rain_since_9am': data.get('rainfall', {}).get('daily', {}).get('value')
+        }
 
         return {
             'station_name': station_name,
-            'last_updated_product': last_updated_product,
-            'observations': processed_observations
+            'last_updated_product': f"Last updated: {formatted_time_obj['date']} {formatted_time_obj['time']}",
+            'observations': [processed_observation] # Return as a list to match template structure
         }, None
 
-    except requests.exceptions.SSLError as e:
-        return None, f"SSL Error: {e}. Could not verify the server's SSL certificate."
     except requests.exceptions.RequestException as e:
-        return None, f"Error fetching data: {e}"
-    except json.JSONDecodeError:
-        return None, "Error decoding JSON data from BOM. The data might not be in the expected format."
-    except KeyError as e:
-        return None, f"Unexpected data structure from BOM: Missing key {e}"
-    except Exception as e:
-        return None, f"An unexpected error occurred: {e}"
+        return None, f"Error fetching Ecowitt data: {e}"
+    except (json.JSONDecodeError, KeyError) as e:
+        return None, f"Error processing Ecowitt data response: {e}"
+
 
 @app.route('/')
 def home():
-    weather_info, error_message = fetch_weather_data()
+    station_id = request.args.get('station', 'station1') # Default to station1
+    station_info = STATIONS.get(station_id)
+
+    if not station_info:
+        return render_template('index.html', error=f"Station '{station_id}' not found.")
+
+    if 'ecowitt' in station_info['name'].lower():
+        weather_info, error_message = fetch_ecowitt_data(station_info['api_url'], station_info['name'])
+    else:
+        # Placeholder for your BOM fetching logic if you want to keep it
+        weather_info, error_message = None, "BOM data fetching is not implemented in this version."
+
     if error_message:
-        return render_template('index.html', error=error_message)
-    return render_template('index.html', weather=weather_info)
+        return render_template('index.html', error=error_message, current_station=station_id, stations=STATIONS)
+        
+    return render_template('index.html', weather=weather_info, current_station=station_id, stations=STATIONS)
+
 
 @app.route('/api/weather')
 def api_weather():
-    weather_info, error_message = fetch_weather_data()
+    station_id = request.args.get('station', 'station1')
+    station_info = STATIONS.get(station_id)
+
+    if not station_info:
+        return jsonify({'error': f"Station '{station_id}' not found."}), 404
+
+    if 'ecowitt' in station_info['name'].lower():
+        weather_info, error_message = fetch_ecowitt_data(station_info['api_url'], station_info['name'])
+    else:
+        weather_info, error_message = None, "BOM data fetching not implemented."
+
     if error_message:
         return jsonify({'error': error_message}), 500
     if not weather_info:
         return jsonify({'error': 'No weather data available'}), 404
+        
     return jsonify(weather_info)
 
 if __name__ == '__main__':
