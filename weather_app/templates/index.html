@@ -13,10 +13,14 @@
             <h1>Weather Dashboard</h1>
             <div class="station-switcher">
                 {% for id, station in stations.items() %}
-                    <a href="?station={{ id }}" class="station-button {{ 'active' if id == current_station else '' }}">
+                    <a href="?station={{ id }}&units={{ current_units }}" class="station-button {{ 'active' if id == current_station else '' }}">
                         {{ station.name }}
                     </a>
                 {% endfor %}
+            </div>
+            <div class="unit-switcher">
+                <a href="?station={{ current_station }}&units=c" class="unit-button {{ 'active' if current_units == 'c' else '' }}">°C</a>
+                <a href="?station={{ current_station }}&units=f" class="unit-button {{ 'active' if current_units == 'f' else '' }}">°F</a>
             </div>
         </div>
 
@@ -30,13 +34,6 @@
                 <h2>{{ weather.station_name }}</h2>
                 <p class="last-updated">{{ weather.last_updated_product }}</p>
             </div>
-            
-            <!-- Since Ecowitt real-time API gives one observation, a chart is not practical.
-                 This section is commented out but can be adapted for historical data later.
-            <div class="chart-container">
-                <canvas id="tempChart"></canvas>
-            </div> 
-            -->
 
             <div class="observations-grid">
                 {% for obs in weather.observations %}
@@ -47,7 +44,7 @@
                     <div class="weather-details">
                         <div class="detail-item">
                             <span class="label">Temperature:</span>
-                            <span class="value">{{ obs.air_temp if obs.air_temp is not none else 'N/A' }}°C</span>
+                            <span class="value">{{ obs.air_temp if obs.air_temp is not none else 'N/A' }}°{{ 'F' if current_units == 'f' else 'C' }}</span>
                         </div>
                         <div class="detail-item">
                             <span class="label">Humidity:</span>
@@ -78,13 +75,11 @@
         {% endif %}
 
         <div class="api-link">
-            <p>View raw data: <a href="{{ url_for('api_weather', station=current_station) }}" target="_blank">/api/weather?station={{ current_station }}</a></p>
+            <p>View raw data: <a href="{{ url_for('api_weather', station=current_station, units=current_units) }}" target="_blank">/api/weather?station={{ current_station }}&units={{ current_units }}</a></p>
         </div>
     </div>
     <footer>
         <p>Weather data sourced from Ecowitt.</p>
     </footer>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- Chart.js script is kept for future use but not active for single-point data -->
 </body>
 </html>
