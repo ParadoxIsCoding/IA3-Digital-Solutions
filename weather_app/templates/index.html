@@ -39,12 +39,20 @@
                 {% for obs in weather.observations %}
                 <div class="observation-card">
                     <h3>Observation Time</h3>
-                    <p class="time-highlight">{{ obs.local_time_obj.time }} <span class="date-small">{{ obs.local_time_obj.date }}</span></p>
+                    {% if obs.local_time_obj.malformed %}
+                        <p class="time-highlight">{{ obs.local_time_obj.original }} <span class="date-small">(Malformed)</span></p>
+                    {% else %}
+                        <p class="time-highlight">{{ obs.local_time_obj.time }} <span class="date-small">{{ obs.local_time_obj.date }}</span></p>
+                    {% endif %}
                     
                     <div class="weather-details">
                         <div class="detail-item">
                             <span class="label">Temperature:</span>
                             <span class="value">{{ obs.air_temp if obs.air_temp is not none else 'N/A' }}°{{ 'F' if current_units == 'f' else 'C' }}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="label">Feels Like:</span>
+                            <span class="value">{{ obs.apparent_temp if obs.apparent_temp is not none else 'N/A' }}°{{ 'F' if current_units == 'f' else 'C' }}</span>
                         </div>
                         <div class="detail-item">
                             <span class="label">Humidity:</span>
@@ -60,7 +68,7 @@
                         </div>
                         <div class="detail-item">
                             <span class="label">Pressure:</span>
-                            <span class="value">{{ obs.pressure_hpa if obs.pressure_hpa is not none else 'N/A' }} hPa</span>
+                            <span class="value">{{ obs.pressure_val if obs.pressure_val is not none else 'N/A' }} {{ obs.pressure_unit }}</span>
                         </div>
                         <div class="detail-item">
                             <span class="label">Daily Rain:</span>
@@ -71,7 +79,9 @@
                 {% endfor %}
             </div>
         {% else %}
-            <p>Loading weather data or no data available...</p>
+            <div class="loading-message">
+                <p>Loading weather data or no data available for this station...</p>
+            </div>
         {% endif %}
 
         <div class="api-link">

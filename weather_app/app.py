@@ -22,55 +22,91 @@ STATIONS = {
     }
 }
 
-# --- Data Fetching and Processing ---
+# --- Utility Functions ---
 
-def convert_temperature(temp_c, target_unit):
-    """Converts temperature from Celsius to Fahrenheit if requested."""
-    if temp_c is None or not isinstance(temp_c, (int, float)):
-        return None  # Return None if input is invalid
+def safe_float(value):
+    """Safely converts a value to a float, handling None or non-numeric strings."""
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (ValueError, TypeError):
+        return None
+
+def to_celsius(temp, unit_str):
+    """Converts a temperature value to Celsius if it's in Fahrenheit."""
+    temp_val = safe_float(temp)
+    if temp_val is None:
+        return None
+    if unit_str and 'f' in unit_str.lower():
+        # Formula: C = (F - 32) * 5/9
+        return (temp_val - 32) * 5 / 9
+    return temp_val  # Assume Celsius if not Fahrenheit
+
+def convert_display_temperature(temp_c, target_unit):
+    """Converts a Celsius temperature to the target display unit (e.g., Fahrenheit)."""
+    if temp_c is None:
+        return None
     if target_unit.lower() == 'f':
         # Formula: F = C * 9/5 + 32
         return round((temp_c * 9 / 5) + 32, 1)
-    return temp_c  # Return Celsius by default
+    return round(temp_c, 1) # Return Celsius by default, rounded
 
-def format_ecowitt_time(utc_timestamp):
-    """Formats a UTC timestamp from the Ecowitt API to a local time dictionary."""
-    if not utc_timestamp or not isinstance(utc_timestamp, int):
-        return {'date': 'N/A', 'time': 'N/A', 'original': utc_timestamp}
+def format_ecowitt_time(utc_timestamp_str):
+    """Formats a UTC timestamp string from the Ecowitt API safely."""
+    ts = safe_float(utc_timestamp_str)
+    if ts is None:
+        return {'date': 'N/A', 'time': 'N/A', 'original': utc_timestamp_str}
     try:
-        dt_object = datetime.fromtimestamp(utc_timestamp)
+        dt_object = datetime.fromtimestamp(ts)
         return {
             'date': dt_object.strftime('%d/%m/%Y'),
             'time': dt_object.strftime('%H:%M:%S'),
-            'original': utc_timestamp
+            'original': utc_timestamp_str
         }
-    except Exception:
-        return {'date': 'N/A', 'time': 'N/A', 'original': utc_timestamp, 'malformed': True}
+    except (ValueError, TypeError):
+        return {'date': 'N/A', 'time': 'N/A', 'original': utc_timestamp_str, 'malformed': True}
 
-def fetch_ecowitt_data(api_url, station_name, units='c'):
+# --- Data Fetching Logic ---
+
+def fetch_ecowitt_data(api_url, station_name, display_units='c'):
     """Fetches and processes weather data from the Ecowitt API."""
     try:
         response = requests.get(api_url, timeout=10)
         response.raise_for_status()
-        data = response.json().get('data', {})
-        
-        weather_data = data.get('outdoor', {})
-        last_update_timestamp = data.get('time')
-        formatted_time_obj = format_ecowitt_time(last_update_timestamp)
+        api_data = response.json().get('data', {})
 
-        # Get original temperature in Celsius
-        temp_c = weather_data.get('temperature', {}).get('value')
+        if not api_data:
+            return None, "Received empty data payload from API."
+
+        # --- Extract Main Sections ---
+        outdoor_data = api_data.get('outdoor', {})
+        feels_like_data = api_data.get('feels_like', {})
+        pressure_data = api_data.get('pressure', {}).get('absolute', {})
+        wind_data = api_data.get('wind', {})
+        rainfall_data = api_data.get('rainfall', {})
+        
+        # --- Time ---
+        formatted_time_obj = format_ecowitt_time(api_data.get('time'))
+
+        # --- Temperature (Unit-aware) ---
+        temp_from_api = outdoor_data.get('temperature', {})
+        temp_c = to_celsius(temp_from_api.get('value'), temp_from_api.get('unit'))
+        
+        # --- Feels Like (Unit-aware) ---
+        feels_like_from_api = feels_like_data.get('temperature', {})
+        feels_like_c = to_celsius(feels_like_from_api.get('value'), feels_like_from_api.get('unit'))
 
         processed_observation = {
             'local_time_obj': formatted_time_obj,
-            'air_temp': convert_temperature(temp_c, units),
-            'apparent_temp': 'N/A',
-            'humidity': weather_data.get('humidity', {}).get('value'),
-            'wind_dir': 'N/A',
-            'wind_spd_kmh': data.get('wind', {}).get('wind_speed', {}).get('value'),
-            'gust_kmh': data.get('wind', {}).get('wind_gust', {}).get('value'),
-            'pressure_hpa': data.get('pressure', {}).get('absolute', {}).get('value'),
-            'rain_since_9am': data.get('rainfall', {}).get('daily', {}).get('value')
+            'air_temp': convert_display_temperature(temp_c, display_units),
+            'apparent_temp': convert_display_temperature(feels_like_c, display_units),
+            'humidity': safe_float(outdoor_data.get('humidity', {}).get('value')),
+            'wind_spd_kmh': safe_float(wind_data.get('wind_speed', {}).get('value')),
+            'gust_kmh': safe_float(wind_data.get('wind_gust', {}).get('value')),
+            'pressure_val': safe_float(pressure_data.get('value')),
+            'pressure_unit': pressure_data.get('unit', 'hPa'),
+            'rain_since_9am': safe_float(rainfall_data.get('daily', {}).get('value'))
         }
 
         return {
@@ -84,14 +120,16 @@ def fetch_ecowitt_data(api_url, station_name, units='c'):
     except (json.JSONDecodeError, KeyError) as e:
         return None, f"Error processing Ecowitt data response: {e}"
 
+# --- Flask Routes ---
+
 @app.route('/')
 def home():
     station_id = request.args.get('station', 'station1')
-    units = request.args.get('units', 'c')  # Get units, default to 'c'
+    units = request.args.get('units', 'c')
     station_info = STATIONS.get(station_id)
 
     if not station_info:
-        return render_template('index.html', error=f"Station '{station_id}' not found.")
+        return render_template('index.html', error=f"Station '{station_id}' not found.", stations=STATIONS, current_station=station_id, current_units=units)
 
     weather_info, error_message = fetch_ecowitt_data(station_info['api_url'], station_info['name'], units)
 
@@ -99,6 +137,7 @@ def home():
         return render_template('index.html', error=error_message, current_station=station_id, stations=STATIONS, current_units=units)
         
     return render_template('index.html', weather=weather_info, current_station=station_id, stations=STATIONS, current_units=units)
+
 
 @app.route('/api/weather')
 def api_weather():
@@ -116,7 +155,6 @@ def api_weather():
     if not weather_info:
         return jsonify({'error': 'No weather data available'}), 404
         
-    # Add the current unit to the API response
     weather_info['units'] = units.upper()
     return jsonify(weather_info)
 
