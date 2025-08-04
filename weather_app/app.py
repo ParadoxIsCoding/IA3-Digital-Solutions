@@ -1,23 +1,25 @@
 import json
 import requests
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, render_template, jsonify, request, redirect, url_for, session
 import urllib3
 from datetime import datetime
+from functools import wraps
 
 # Disable InsecureRequestWarning: CERTIFICATE_VERIFY_FAILED
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 app = Flask(__name__)
+app.secret_key = 'your_secret_key_here'  # Needed for session management
 
 # --- Configuration for Weather Stations ---
 
 STATIONS = {
     'station1': {
-        'name': 'Ecowitt Station 1',
+        'name': 'G Block',
         'api_url': 'https://api.ecowitt.net/api/v3/device/real_time?application_key=2A514E07593482820CACAAB8FD0C73B2&api_key=17a5de25-fa25-4a18-9c86-78e93184c44c&mac=D8:BC:38:AA:96:AF&call_back=all'
     },
     'station2': {
-        'name': 'Ecowitt Station 2',
+        'name': 'Art Block',
         'api_url': 'https://api.ecowitt.net/api/v3/device/real_time?application_key=2A514E07593482820CACAAB8FD0C73B2&api_key=17a5de25-fa25-4a18-9c86-78e93184c44c&mac=D8:BC:38:AA:EF:E1&call_back=all'
     }
 }
@@ -120,9 +122,37 @@ def fetch_ecowitt_data(api_url, station_name, display_units='c'):
     except (json.JSONDecodeError, KeyError) as e:
         return None, f"Error processing Ecowitt data response: {e}"
 
+# --- Login Required Decorator ---
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not session.get('logged_in'):
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
 # --- Flask Routes ---
 
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    error = None
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        if username == 'admin' and password == 'admin':
+            session['logged_in'] = True
+            return redirect(url_for('home'))
+        else:
+            error = 'Invalid credentials. Please try again.'
+    return render_template('login.html', error=error)
+
+@app.route('/logout')
+def logout():
+    session.pop('logged_in', None)
+    return redirect(url_for('login'))
+
 @app.route('/')
+@login_required
 def home():
     station_id = request.args.get('station', 'station1')
     units = request.args.get('units', 'c')
@@ -140,6 +170,7 @@ def home():
 
 
 @app.route('/api/weather')
+@login_required
 def api_weather():
     station_id = request.args.get('station', 'station1')
     units = request.args.get('units', 'c')
