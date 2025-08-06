@@ -1,0 +1,74 @@
+digraph {
+	dpi=300 fontname=Helvetica nodesep=0.5 rankdir=LR ranksep=1.2
+	root [label="IA3 Digital Solutions Project" shape=ellipse]
+	branch0 [label="Proto-personas" shape=ellipse]
+	root -> branch0
+	branch0_0 [label="Lyndsey (Farmer)" shape=ellipse]
+	branch0 -> branch0_0
+	branch0_1 [label="Carol (Planner)" shape=ellipse]
+	branch0 -> branch0_1
+	branch0_2 [label="Shane (Developer)" shape=ellipse]
+	branch0 -> branch0_2
+	branch1 [label="Problem and Opportunity" shape=ellipse]
+	root -> branch1
+	branch1_0 [label="View local weather" shape=ellipse]
+	branch1 -> branch1_0
+	branch1_1 [label="Need real-time data" shape=ellipse]
+	branch1 -> branch1_1
+	branch1_2 [label="Users require filtering" shape=ellipse]
+	branch1 -> branch1_2
+	branch2 [label="Key Areas of Study (IA3)" shape=ellipse]
+	root -> branch2
+	branch2_0 [label="Part 1: Research" shape=ellipse]
+	branch2 -> branch2_0
+	branch2_1 [label="Part 2: Development" shape=ellipse]
+	branch2 -> branch2_1
+	branch2_2 [label="Part 3: Impacts" shape=ellipse]
+	branch2 -> branch2_2
+	branch3 [label="Data Exchange Components" shape=ellipse]
+	root -> branch3
+	branch3_0 [label="JSON API access" shape=ellipse]
+	branch3 -> branch3_0
+	branch3_1 [label="Secure data handling" shape=ellipse]
+	branch3 -> branch3_1
+	branch3_2 [label="User-specific filtering" shape=ellipse]
+	branch3 -> branch3_2
+	branch4 [label="Solution Specifications" shape=ellipse]
+	root -> branch4
+	branch4_0 [label="Login system" shape=ellipse]
+	branch4 -> branch4_0
+	branch4_1 [label="Dashboard output" shape=ellipse]
+	branch4 -> branch4_1
+	branch4_2 [label="Settings/preferences" shape=ellipse]
+	branch4 -> branch4_2
+	branch5 [label="User Stories" shape=ellipse]
+	root -> branch5
+	branch5_0 [label="Farmer: Rainfall + Temp" shape=ellipse]
+	branch5 -> branch5_0
+	branch5_1 [label="Planner: UV + Wind" shape=ellipse]
+	branch5 -> branch5_1
+	branch5_2 [label="Developer: Solar + Wind Dir" shape=ellipse]
+	branch5 -> branch5_2
+	branch6 [label="Mind Map Flow" shape=ellipse]
+	root -> branch6
+	branch6_0 [label="API → Transform → Display" shape=ellipse]
+	branch6 -> branch6_0
+	branch6_1 [label="User filters apply logic" shape=ellipse]
+	branch6 -> branch6_1
+	branch7 [label=Wireframes shape=ellipse]
+	root -> branch7
+	branch7_0 [label="Login Wireframe" shape=ellipse]
+	branch7 -> branch7_0
+	branch7_1 [label="Dashboard Wireframe" shape=ellipse]
+	branch7 -> branch7_1
+	branch8 [label="Authentication and Security" shape=ellipse]
+	root -> branch8
+	branch8_0 [label="SHA256 Password Hashing" shape=ellipse]
+	branch8 -> branch8_0
+	branch8_1 [label="No PII Stored" shape=ellipse]
+	branch8 -> branch8_1
+	branch8_2 [label="HTTPS Protocol" shape=ellipse]
+	branch8 -> branch8_2
+	branch8_3 [label="Validation and Filtering" shape=ellipse]
+	branch8 -> branch8_3
+}
